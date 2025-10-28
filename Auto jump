@@ -1,0 +1,143 @@
+-- 🔥 Auto Jump + Anti Perda de Velocidade em Rampas (Evade otimizado)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- CONFIGURAÇÃO
+local JUMP_DELAY = 0
+local SPEED_STABILIZE = true -- mantém velocidade constante em rampas
+local AUTOJUMP_KEY = nil
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoJump_UI"
+ScreenGui.Parent = game.CoreGui
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 180, 0, 64)
+MainFrame.Position = UDim2.new(0, 40, 0, 60)
+MainFrame.BackgroundColor3 = Color3.fromRGB(22,22,22)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,8)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, -12, 0, 18)
+Title.Position = UDim2.new(0, 6, 0, 6)
+Title.BackgroundTransparency = 1
+Title.Text = "Auto Jump"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Center
+
+local ToggleBtn = Instance.new("TextButton", MainFrame)
+ToggleBtn.Size = UDim2.new(1, -12, 0, 32)
+ToggleBtn.Position = UDim2.new(0, 6, 0, 28)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+ToggleBtn.TextColor3 = Color3.new(1,1,1)
+ToggleBtn.Font = Enum.Font.SourceSans
+ToggleBtn.TextSize = 14
+ToggleBtn.Text = "Auto Jump: OFF"
+ToggleBtn.AutoButtonColor = true
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0,6)
+
+-- Estado
+local autoJumpOn = false
+local humanoid = nil
+local stateConn = nil
+local lastSpeed = 0
+
+local function disconnectState()
+	if stateConn then
+		pcall(function() stateConn:Disconnect() end)
+		stateConn = nil
+	end
+end
+
+local function doJump()
+	if autoJumpOn and humanoid and humanoid.Health > 0 then
+		pcall(function()
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			humanoid.Jump = true
+		end)
+	end
+end
+
+local function onStateChanged(_, newState)
+	if not autoJumpOn then return end
+	if newState == Enum.HumanoidStateType.Landed or newState == Enum.HumanoidStateType.Running then
+		if JUMP_DELAY > 0 then
+			task.wait(JUMP_DELAY)
+		end
+		doJump()
+	end
+end
+
+local function connectHumanoid(h)
+	disconnectState()
+	humanoid = h
+	if not humanoid then return end
+	stateConn = humanoid.StateChanged:Connect(onStateChanged)
+	lastSpeed = humanoid.WalkSpeed
+end
+
+local function onCharacterAdded(char)
+	local h = char:WaitForChild("Humanoid", 3)
+	connectHumanoid(h)
+end
+
+if LocalPlayer.Character then
+	onCharacterAdded(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+LocalPlayer.CharacterRemoving:Connect(function()
+	disconnectState()
+	humanoid = nil
+end)
+
+-- 🔥 Mantém velocidade estável ao subir rampas
+RunService.Heartbeat:Connect(function()
+	if SPEED_STABILIZE and humanoid and humanoid.MoveDirection.Magnitude > 0 then
+		if humanoid.WalkSpeed > 0 then
+			-- Força o WalkSpeed original se o Roblox reduzir ao subir
+			if humanoid.WalkSpeed < lastSpeed - 0.1 then
+				humanoid.WalkSpeed = lastSpeed
+			end
+			lastSpeed = humanoid.WalkSpeed
+		end
+	end
+end)
+
+-- Toggle botão
+ToggleBtn.MouseButton1Click:Connect(function()
+	autoJumpOn = not autoJumpOn
+	ToggleBtn.Text = autoJumpOn and "Auto Jump: ON" or "Auto Jump: OFF"
+
+	if autoJumpOn then
+		task.wait(JUMP_DELAY)
+		doJump()
+	end
+end)
+
+-- Tecla opcional
+if AUTOJUMP_KEY then
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if input.KeyCode == AUTOJUMP_KEY then
+			autoJumpOn = not autoJumpOn
+			ToggleBtn.Text = autoJumpOn and "Auto Jump: ON" or "Auto Jump: OFF"
+			if autoJumpOn then
+				task.wait(JUMP_DELAY)
+				doJump()
+			end
+		end
+	end)
+end
+
+ScreenGui.Destroying:Connect(disconnectState)
+
+print("✅ Auto Jump + Anti Perda de Velocidade em Rampas carregado com sucesso.")
